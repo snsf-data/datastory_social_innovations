@@ -1,0 +1,567 @@
+---
+title: "`r params$title`"
+format:
+  html:
+    toc: false
+    css: ["style.css"]
+    mainfont: Theinhardt
+    fontsize: "16px"
+    # To use instead of self-contained that has been deprecated
+    embed-resources: true
+    # Using custom page layout (via 'style.css')
+    page-layout: custom
+    # Open link in a new window by default
+    link-external-newwindow: true
+    # Display footnotes in pop-up window when hovering on it
+    footnotes-hover: true
+# The empty params are replaced by those passed to "execute_params" when
+# rendering
+params:
+  title: ""
+  publication_date: ""
+  lang: "fr"
+  doi: ""
+  github_url: ""
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r general-setup, include=FALSE}
+
+## This file contains the ENGLISH version of the data story
+
+# Set general chunk options
+knitr::opts_chunk$set(
+  echo = FALSE,
+  fig.showtext = TRUE,
+  fig.retina = 3,
+  fig.align = "center",
+  warning = FALSE,
+  message = FALSE
+)
+
+# Install snf.datastory package if not available, otherwise load it
+if (!require("snf.datastory")) {
+  if (!require("devtools")) {
+    install.packages("devtools")
+    library(devtools)
+  }
+  install_github("snsf-data/snf.datastory")
+  library(snf.datastory)
+}
+
+# Load packages
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(conflicted)
+library(jsonlite)
+library(here)
+library(glue)
+library(ggiraph)
+library(showtext)
+library(systemfonts)
+
+# Conflict preferences
+conflict_prefer("filter", "dplyr")
+conflict_prefer("lag", "dplyr")
+conflict_prefer("get_datastory_theme", "snf.datastory")
+conflict_prefer("get_datastory_scheme", "snf.datastory")
+
+source(here("R/helpers.R"))
+
+is_theinhardt_available <- file.exists(here("fonts", "TheinhardtReg.otf"))
+
+if (is_theinhardt_available) {
+  
+  sysfonts::font_add(
+    family = "Theinhardt",
+    regular = here("fonts", "TheinhardtReg.otf"),
+    bold = here("fonts", "TheinhardtBold.otf"),
+    bolditalic = here("fonts", "TheinhardtBoldIt.otf"),
+    italic = here("fonts", "TheinhardtRegIt.otf"),
+  )
+  
+  # Need to register the font to allow its use by ggiraph when creating SVG
+  # files.
+  if (!font_family_exists("Theinhardt")) {
+    
+    # Register existing/downloaded fonts
+    register_font(
+      name = "Theinhardt",
+      plain = list("fonts/TheinhardtReg.otf", 0),
+      bold = list("fonts/TheinhardtBold.otf", 0),
+      italic = list("fonts/TheinhardtRegIt.otf", 0),
+      bolditalic = list("fonts/TheinhardtBoldIt.otf", 0)
+    )
+  }
+  
+  font <- "Theinhardt"
+  
+} else {
+  
+  font <- "Arial"
+  
+}
+
+# Need if we want to use the registered font in ggiraph plots
+showtext_auto()
+
+# Increase showtext package font resolution
+showtext_opts(dpi = 320)
+
+# Set the locale for date formatting (Windows)
+Sys.setlocale(
+  "LC_TIME",
+  switch(
+    params$lang,
+    en = "English",
+    de = "German",
+    fr = "French"
+  )
+)
+
+# Create function to print number with local language-specific format
+print_num <- function(x) snf.datastory::print_num(x, lang = params$lang)
+
+# Knitr hook for local formatting of printed numbers
+knitr::knit_hooks$set(
+  inline <- function(x) {
+    if (!is.numeric(x)) {
+      x
+    } else {
+      print_num(x)
+    }
+  }
+)
+
+# Function that returns the desired language version of a string, given three
+# language strings are provided to the function.
+translate <- function(en_string = "NOT TRANSLATED",
+                      de_string = "NOT TRANSLATED",
+                      fr_string = "NOT TRANSLATED",
+                      lang = "fr") {
+  
+  string <-
+    case_when(
+      lang == "en" ~ en_string, 
+      lang == "de" ~ de_string, 
+      lang == "fr" ~ fr_string, 
+      TRUE ~ "NO VALID LANGUAGE SPECIFIED"
+    )
+  
+  return(string)
+  
+}
+
+```
+
+```{r print-header-infos}
+#| results: asis
+
+# Add publication date to header
+cat(format(as_datetime(params$publication_date), "%d.%m.%Y"))
+```
+
+```{r story-specific-setup}
+#| include: false
+
+dat <-
+  read_delim(here("data/SIVOCS_data.csv"), delim = "\t") |>
+  rename_with(\(x) str_extract(x, "^[^(\\s\\.)]+"))
+
+```
+
+
+<!-- Short lead (2-3 sentences) in bold -->
+
+**Les résultats issus des projets encouragés par le FNS trouvent des applications pratiques dans toutes les disciplines et jettent ainsi un pont entre science et société. Mais quelle forme cette relation prend-elle exactement ?**
+
+Quel potentiel d’innovation sociale les projets encouragés par le FNS recèlent-ils ? Telle est la question à laquelle le Centre pour l’innovation sociale de Vienne (Zentrum für Soziale Innovation – ZSI) se proposait de répondre à travers une étude réalisée sur mandat du FNS. Au total, ce sont ainsi plus de 360 bénéficiaires de subsides ayant bénéficié d’un financement dans le cadre de l’encouragement de projets à thème ouvert ou du programme Sinergia qui ont été interrogés sur le sujet à multiples facettes que constitue l’innovation sociale.
+
+Ce concept s’avère par ailleurs complexe à appréhender et les avis divergent quant à sa signification exacte. Nous définirons ici brièvement les innovations sociales comme des nouveautés qui résultent de projets de recherche, trouvent une application dans la pratique et contribuent par conséquent directement à la résolution de questions et de problèmes de société. Il s’agit donc de résultats de recherche qui visent à apporter un bénéfice direct à la population, ou à exercer un effet immédiat sur le plan social. 
+
+### L’utilité sociale en ligne de mire
+
+La valorisation des résultats de la recherche n’est que la dernière étape d’un long processus, qui exige que les jalons de l’innovation sociale soient posés bien en amont, et avant tout dans la tête des chercheuses et chercheurs. Il faut en premier lieu que les scientifiques aient à cœur d’apporter leur contribution à des domaines socialement pertinents en dehors du milieu académique. L’étude du ZSI révèle que tel est souvent le cas et qu’améliorer la vie sociale grâce à leurs travaux de recherche constitue une motivation pour 65\% des bénéficiaires de subsides interrogés : 75\% d'entre eux déclarent même être « très motivés » par cette perspective. Pour une grande partie, l’utilité sociale transcende donc le domaine purement scientifique, et ce dès la conception de leur projet. 
+
+::: plot-box
+<div class="plot-title">De nombreux bénéficiaires de subsides ont pour ambition d’améliorer le bien-être de la population</div>
+```{r plot-1}
+#| out-width: "100%"
+#| fig-height: 2.25
+
+motivation_1 <-
+  switch(
+    params$lang,
+    en = "",
+    de = "Motivation, ein Phänomen zu verstehen",
+    fr = "Motivation à comprendre un phénomène"
+  )
+
+motivation_2 <-
+  switch(
+    params$lang,
+    en = "",
+    de = "Motivation, ein Problem zu lösen",
+    fr = "Motivation à résoudre un problème"
+  )
+
+motivation_3 <-
+  switch(
+    params$lang,
+    en = "",
+    de = "Motivation, das menschliche Wohlergehen zu verbessern",
+    fr = "Motivation à améliorer le bien-être de la population "
+  )
+
+tribble(
+  ~var,         ~answer, ~n,
+  motivation_1, "Yes",   0.84,
+  motivation_1, "No",    0.16,
+  motivation_2, "Yes",   0.82,
+  motivation_2, "No",    0.18,
+  motivation_3, "Yes",   0.65,
+  motivation_3, "No",    0.35,
+) |>
+  mutate(
+    prop = n / sum(n),
+    order = prop[answer == "Yes"],
+    .by = var
+  ) |>
+  filter(answer == "Yes") |>
+  prep_data(answer_type = "skip", lang = params$lang) |>
+  make_plot(
+    x = prop,
+    y = var,
+    fill = answer
+  )
+
+```
+::: caption
+Données : les chiffres utilisés pour élaborer le présent graphique ont été reproduits sur base de l’étude du ZSI et se réfèrent à la figure 12 (p. 42) de l’étude. Les catégories « 4-6 » et « 7-10…fully » ont été regroupées sous « motivations ».
+:::
+:::
+
+::: hide-mobile
+::: info-box-mint
+<div>
+<figure class="figure-left">
+<img src="data/img/SilvestroMicera.jpg" class="img-left" />
+<figcaption>© EPFL/Hillary Sanctuary </figcaption>
+</figure>
+</div>
+<div>
+<h3>Les recherches de Silvestro Micera : des prothèses qui font sensation</h3>
+::: p-before-button
+« Aider les gens a toujours été et demeure l’une de mes principales motivations », souligne Silvestro Micera, professeur de neuroingénierie à l’EPFL. En collaboration avec son équipe, il développe des prothèses d’un nouveau genre à l’intention des personnes amputées. Ces technologies novatrices leur permettent non seulement de se mouvoir, mais aussi de bénéficier d’un toucher plus réaliste. Dans le cadre d’un projet encouragé par le FNS, les scientifiques ont ainsi développé une prothèse de main qui offre pour la première fois la possibilité de percevoir des sensations thermiques. Pour ce faire, des capteurs artificiels intégrés à la prothèse envoient des impulsions électroniques aux nerfs encore intacts du bras, qui les traduisent ensuite en signaux que le cerveau est en mesure de décrypter. Les prothèses de jambe mises au point par les scientifiques fonctionnent selon un principe similaire et intègrent également des retours sensoriels. Ces innovations facilitent la vie des patient·es, non seulement parce que ceux-ci parviennent à marcher plus rapidement et avec plus d’assurance, mais aussi parce qu’elles atténuent notablement leurs douleurs. Tout au long du processus de recherche, l’équipe du professeur Micera a entretenu des contacts étroits avec les personnes concernées afin de répondre au mieux à leurs besoins. Ces travaux soutenus par le FNS ont abouti à la création d’une entreprise qui travaille à la production et à la distribution de prothèses de jambe qui pourront bientôt être mises à la disposition de nombreux patient·es. 
+:::
+</div>
+<p>
+<a class="button-blue" href="https://data.snf.ch/grants?applicant=605966">Lien vers les projets de Silvestro Micera encouragés par le FNS</a>
+</p>
+:::
+:::
+
+::: {.hide-tablet .hide-desktop}
+::: info-box-mint
+<h3>Les recherches de Silvestro Micera : des prothèses qui font sensation</h3>
+<div>
+<figure class="figure-mob">
+<img src="data/img/SilvestroMicera.jpg" class="img-mob" />
+<figcaption class="figcaption">© EPFL/Hillary Sanctuary </figcaption>
+</figure>
+</div>
+<div>
+::: p-before-button
+« Aider les gens a toujours été et demeure l’une de mes principales motivations », souligne Silvestro Micera, professeur de neuroingénierie à l’EPFL. En collaboration avec son équipe, il développe des prothèses d’un nouveau genre à l’intention des personnes amputées. Ces technologies novatrices leur permettent non seulement de se mouvoir, mais aussi de bénéficier d’un toucher plus réaliste. Dans le cadre d’un projet encouragé par le FNS, les scientifiques ont ainsi développé une prothèse de main qui offre pour la première fois la possibilité de percevoir des sensations thermiques. Pour ce faire, des capteurs artificiels intégrés à la prothèse envoient des impulsions électroniques aux nerfs encore intacts du bras, qui les traduisent ensuite en signaux que le cerveau est en mesure de décrypter. Les prothèses de jambe mises au point par les scientifiques fonctionnent selon un principe similaire et intègrent également des retours sensoriels. Ces innovations facilitent la vie des patient·es, non seulement parce que ceux-ci parviennent à marcher plus rapidement et avec plus d’assurance, mais aussi parce qu’elles atténuent notablement leurs douleurs. Tout au long du processus de recherche, l’équipe du professeur Micera a entretenu des contacts étroits avec les personnes concernées afin de répondre au mieux à leurs besoins. Ces travaux soutenus par le FNS ont abouti à la création d’une entreprise qui travaille à la production et à la distribution de prothèses de jambe qui pourront bientôt être mises à la disposition de nombreux patient·es.
+:::
+</div>
+<p>
+<a class="button-blue" href="https://data.snf.ch/grants?applicant=605966">Lien vers les projets de Silvestro Micera encouragés par le FNS</a>
+</p>
+:::
+:::
+
+### La collaboration à l’honneur 
+
+Les projets socialement innovants visent à exercer un impact sur la société et le processus de recherche intègre souvent des personnes ne faisant pas partie du milieu académique. Dans le cadre de son projet, Silvestro Micera a échangé avec des personnes concernées, mais aussi avec du personnel hospitalier et des représentant·es de diverses entreprises. L’étude du ZSI s’est également penchée sur ces collaborations transdisciplinaires. Environ 27\% des scientifiques interrogés ont indiqué avoir impliqué des institutions administratives, des structures sociales et éducatives ou des sociétés à différents degrés dans leurs travaux de recherche, et convié diverses personnes à participer à titre individuel à leurs projets. Si seuls 15\% des scientifiques ont travaillé avec des ONG, 34\% se sont tournés vers les médias – qui constituent le groupe extra-académique le plus important en termes de collaboration. Selon l’étude, ces différents acteurs ont le plus souvent joué un rôle consultatif. Il apparaît néanmoins que loin d’être sollicitées en fin de projet, ces participations interviennent fréquemment dès les toutes premières étapes.
+
+::: plot-box
+<div class="plot-title">Dans quelle mesure différents acteurs sociaux ont-ils été impliqués dans le processus de recherche ?</div>
+```{r plot-2, group-involved}
+#| out-width: "100%"
+#| fig-height: 4
+
+dat |>
+  pivot_data("groupsInvolved") |>
+  prep_data(answer_type = "yes_no", lang = params$lang) |>
+  make_plot(
+    x = prop,
+    y = var,
+    fill = answer
+  )
+
+```
+::: caption
+Données : les chiffres utilisés pour élaborer le présent graphique ont été mis à disposition par le ZSI. Le graphique se réfère à la figure 7 (p. 25) de l’étude. Les catégories « only marginally » et « quite centrally » ont été regroupées sous « oui ». 
+:::
+:::
+
+::: hide-mobile
+::: info-box-ssh
+<div>
+<figure class="figure-right">
+<img src="data/img/ChristianBrühwiler.jpg" class="img-right" />
+<figcaption>© Patrick Massen</figcaption>
+</figure>
+</div>
+<div>
+<h3>Les recherches de Christian Brühwiler : améliorer les compétences des enseignant·es</h3>
+::: p-before-button
+En tant qu’enseignant·e, il est essentiel d’avoir de bonnes connaissances tant spécialisées que didactiques, mais aussi de disposer de compétences pédagogiques et sociales. Celles-ci aident les futurs enseignant·es à résoudre les situations conflictuelles et à établir de meilleures relations avec leurs élèves. Vice-recteur de la Haute école pédagogique de Saint-Gall, Christian Brühwiler étudie comment la transmission de ces compétences pourrait être améliorée lors de la formation des formateurs. « Dans un premier temps, il convient de déterminer comment mesurer ces compétences », explique le professeur Brühwiler. Pour ce faire, son équipe et lui ont développé un test dans le cadre d’un projet encouragé par le FNS. Il s’appuie sur des vidéos mettant en scène différentes situations d’enseignement. Après les avoir visionnées, les enseignant·es sont invités à décrire comment ils agiraient dans le contexte présenté. Il est ainsi possible de recueillir de précieuses informations sur leurs compétences pédagogiques. Les résultats du test constituent une base importante pour développer le cursus et approfondir les connaissances professionnelles. En effet, ils permettent de déterminer quels sont les aspects de la formation qui sont déjà efficaces et quels sont ceux qu’il serait nécessaire d’améliorer. À partir de là, des concepts pourront être élaborés afin que l’acquisition de compétences pédagogiques soit à l’avenir facilitée. Et les enseignant·es ne seront pas les seuls à bénéficier d’une meilleure formation : la vie scolaire des élèves s’en trouvera aussi grandement améliorée.
+:::
+</div>
+<p>
+<a class="button-blue" href="https://data.snf.ch/grants?applicant=74176">Lien vers les projets de Christian Brühwiler encouragés par le FNS</a>
+</p>
+:::
+:::
+
+::: {.hide-tablet .hide-desktop}
+::: info-box-ssh
+<h3>Les recherches de Christian Brühwiler : améliorer les compétences des enseignant·es</h3>
+<div>
+<figure class="figure-mob">
+<img src="data/img/ChristianBrühwiler.jpg" class="img-mob" />
+<figcaption class="figcaption">© Patrick Massen</figcaption>
+</figure>
+</div>
+<div>
+::: p-before-button
+En tant qu’enseignant·e, il est essentiel d’avoir de bonnes connaissances tant spécialisées que didactiques, mais aussi de disposer de compétences pédagogiques et sociales. Celles-ci aident les futurs enseignant·es à résoudre les situations conflictuelles et à établir de meilleures relations avec leurs élèves. Vice-recteur de la Haute école pédagogique de Saint-Gall, Christian Brühwiler étudie comment la transmission de ces compétences pourrait être améliorée lors de la formation des formateurs. « Dans un premier temps, il convient de déterminer comment mesurer ces compétences », explique le professeur Brühwiler. Pour ce faire, son équipe et lui ont développé un test dans le cadre d’un projet encouragé par le FNS. Il s’appuie sur des vidéos mettant en scène différentes situations d’enseignement. Après les avoir visionnées, les enseignant·es sont invités à décrire comment ils agiraient dans le contexte présenté. Il est ainsi possible de recueillir de précieuses informations sur leurs compétences pédagogiques. Les résultats du test constituent une base importante pour développer le cursus et approfondir les connaissances professionnelles. En effet, ils permettent de déterminer quels sont les aspects de la formation qui sont déjà efficaces et quels sont ceux qu’il serait nécessaire d’améliorer. À partir de là, des concepts pourront être élaborés afin que l’acquisition de compétences pédagogiques soit à l’avenir facilitée. Et les enseignant·es ne seront pas les seuls à bénéficier d’une meilleure formation : la vie scolaire des élèves s’en trouvera aussi grandement améliorée.
+:::
+</div>
+<p>
+<a class="button-blue" href="https://data.snf.ch/grants?applicant=74176">Lien vers les projets de Christian Brühwiler encouragés par le FNS</a>
+</p>
+:::
+:::
+
+### Là où les résultats de recherche trouvent application
+
+La plupart des participant·es à l’étude ont indiqué que leurs résultats de recherche avaient principalement permis d’améliorer des processus, des produits ou des offres de service au bénéfice de la population générale. Pour environ 29\% des bénéficiaires de subsides interrogés, les institutions administratives sont le lieu où ils sont valorisés, devant les entreprises (25\%) et les structures sociales et éducatives qui représentent une proportion similaire. Parallèlement, 20\% des chercheuses et chercheurs ont indiqué que leurs résultats de recherche avaient donné naissance à des innovations destinées à des groupes sociaux précis et 15\% qu’ils étaient utilisés par des ONG. 
+
+::: plot-box
+<div class="plot-title">L’innovation sociale profite surtout à la population générale</div>
+```{r plot-3, impact-target-group}
+#| out-width: "100%"
+#| fig-height: 4
+
+dat |>
+  pivot_data("impactTargetGroup") |>
+  prep_data(answer_type = "lmh", lang = params$lang) |>
+  make_plot(
+    x = prop,
+    y = var,
+    fill = answer
+  )
+
+```
+::: caption
+Données : les chiffres utilisés pour élaborer le présent graphique ont été mis à disposition par le ZSI. Le graphique se réfère à la figure 17 (p. 55) de l’étude. Les catégories « 4-6 » et « 7-10…fully » ont été regroupées en une seule.
+:::
+:::
+
+::: hide-mobile
+::: info-box-ls
+<div>
+<figure class="figure-left">
+<img src="data/img/PetraHüppi.jpg" class="img-left" />
+<figcaption><figcaption>© Craig Cutler, @craigcutlerstudio</figcaption></figcaption>
+</figure>
+</div>
+<div>
+<h3>Les recherches de Petra Hüppi : de la musique pour les bébés prématurés</h3>
+::: p-before-button
+Pour Petra Hüppi, l’hôpital est l’endroit où ses résultats de recherche trouvent application. Professeure de pédiatrie et médecin-cheffe du service de développement et de croissance des Hôpitaux Universitaires de Genève, elle est spécialisée dans le développement cérébral des enfants prématurés et des nourrissons à croissance fœtale restreinte. Le cerveau des bébés nés trop tôt n’ayant pas eu le temps d’atteindre une maturité suffisante, ils rencontrent plus tard fréquemment des troubles du développement qui peuvent se manifester sous la forme de difficultés d’apprentissage ou de concentration. Ces tout-petits sont généralement exposés à un stress excessif après la naissance, car ils doivent être placés en couveuse afin d’y recevoir des soins en néonatologie. Pour réduire ce stress et prévenir d’éventuels troubles ultérieurs, Petra Hüppi recourt à la musique. Avec l’aide du musicien Andreas Vollenweider, elle a ainsi testé les instruments que les bébés trouvent particulièrement apaisants. Fort de ses connaissances, Andreas Vollenweider a ensuite composé trois mélodies dans le cadre de ce projet de recherche encouragé par le FNS en vue de soutenir les bébés dans trois situations particulières : lorsqu’ils se réveillent, lorsqu’ils sont en phase d’éveil actif et lorsqu’ils s’endorment. Il a été constaté que les bébés ayant écouté ces morceaux souffraient moins des effets négatifs de la prématurité et que certaines régions de leur cerveau s’étaient mieux et plus rapidement développées. Si vous avez envie d’en découvrir plus, vous pouvez écouter ces musiques en cliquant sur le lien suivant : [Music in premature infants enhances high-level cognitive brain networks](https://www.pnas.org/doi/abs/10.1073/pnas.1817536116)
+:::
+</div>
+<p>
+<a class="button-blue" href="https://data.snf.ch/grants?applicant=66813">Lien vers les projets de Petra Hüppi encouragés par le FNS</a>
+</p>
+:::
+:::
+
+::: {.hide-tablet .hide-desktop}
+::: info-box-ls
+<h3>Les recherches de Petra Hüppi : de la musique pour les bébés prématurés</h3>
+<div>
+<figure class="figure-mob">
+<img src="data/img/PetraHüppi.jpg" class="img-mob" />
+<figcaption class="figcaption"><figcaption>© Craig Cutler, @craigcutlerstudio</figcaption></figcaption>
+</figure>
+</div>
+<div>
+::: p-before-button
+Pour Petra Hüppi, l’hôpital est l’endroit où ses résultats de recherche trouvent application. Professeure de pédiatrie et médecin-cheffe du service de développement et de croissance des Hôpitaux Universitaires de Genève, elle est spécialisée dans le développement cérébral des enfants prématurés et des nourrissons à croissance fœtale restreinte. Le cerveau des bébés nés trop tôt n’ayant pas eu le temps d’atteindre une maturité suffisante, ils rencontrent plus tard fréquemment des troubles du développement qui peuvent se manifester sous la forme de difficultés d’apprentissage ou de concentration. Ces tout-petits sont généralement exposés à un stress excessif après la naissance, car ils doivent être placés en couveuse afin d’y recevoir des soins en néonatologie. Pour réduire ce stress et prévenir d’éventuels troubles ultérieurs, Petra Hüppi recourt à la musique. Avec l’aide du musicien Andreas Vollenweider, elle a ainsi testé les instruments que les bébés trouvent particulièrement apaisants. Fort de ses connaissances, Andreas Vollenweider a ensuite composé trois mélodies dans le cadre de ce projet de recherche encouragé par le FNS en vue de soutenir les bébés dans trois situations particulières : lorsqu’ils se réveillent, lorsqu’ils sont en phase d’éveil actif et lorsqu’ils s’endorment. Il a été constaté que les bébés ayant écouté ces morceaux souffraient moins des effets négatifs de la prématurité et que certaines régions de leur cerveau s’étaient mieux et plus rapidement développées. Si vous avez envie d’en découvrir plus, vous pouvez écouter ces musiques en cliquant sur le lien suivant : [Music in premature infants enhances high-level cognitive brain networks](https://www.pnas.org/doi/abs/10.1073/pnas.1817536116)
+:::
+</div>
+<p>
+<a class="button-blue" href="https://data.snf.ch/grants?applicant=66813">Lien vers les projets de Petra Hüppi encouragés par le FNS</a>
+</p>
+:::
+:::
+
+### Du laboratoire à la vie quotidienne
+
+L’étude montre que les chercheuses et les chercheurs exploitent de nombreuses voies pour que leurs résultats acquièrent une certaine visibilité en dehors du monde scientifique et qu’ils soient accessibles au plus grand nombre. Non seulement des découvertes novatrices et intéressantes peuvent avoir des retombées dans le domaine public, mais les liens entre science et société s’en trouvent globalement renforcés. Cela permet ainsi de faire entrer la recherche dans la vie de nombreuses personnes. Le site Internet de leur institut constitue le principal canal de diffusion pour 79\% des scientifiques. Un peu plus de 43\% d’entre eux se tournent vers les médias traditionnels comme les journaux ou la télévision pour communiquer, et près de 37\% privilégient les réseaux sociaux. Les manifestations destinées à un large public non académique permettent également à près de 40\% des chercheuses et chercheurs de partager leurs résultats de recherche. 
+
+::: plot-box
+<div class="plot-title">Les sites Internet institutionnels constituent le canal le plus fréquemment utilisé pour partager des résultats de recherche avec un large public</div>
+
+```{r plot-4}
+#| out-width: "100%"
+#| fig-height: 5.5
+
+channel_1 <-
+    switch(
+    params$lang,
+    en = "Policy briefs",
+    de = "Politische Richtlinien",
+    fr = "Directives politiques"
+  )
+
+channel_2 <-
+    switch(
+    params$lang,
+    en = "Traditional media (TV, radio, print)",
+    de = "Traditionelle Medien (TV, Radio, Zeitung)",
+    fr = "Médias traditionnels (TV, radio, journaux)"
+  )
+
+channel_3 <-
+    switch(
+    params$lang,
+    en = "Professional journals and magazines",
+    de = "Fachzeitschriften und -magazine",
+    fr = "Revues et magazines spécialisés"
+  )
+
+channel_4 <-
+    switch(
+    params$lang,
+    en = "Own institutional or project websites",
+    de = "Websites der Forschungsinstitution bzw. des Projekts",
+    fr = "Site Internet de l’institut de recherche ou du projet "
+  )
+
+channel_5 <-
+    switch(
+    params$lang,
+    en = "Social media",
+    de = "Soziale Medien",
+    fr = "Réseaux sociaux"
+  )
+
+channel_6 <-
+    switch(
+    params$lang,
+    en = "Online platforms (data, code sharing)",
+    de = "Online-Plattformen (Data, Code sharing)",
+    fr = "Plateformes en ligne (partage de données, codes)"
+  )
+
+channel_7 <-
+    switch(
+    params$lang,
+    en = "Consultancy",
+    de = "Beratungen",
+    fr = "Consultations"
+  )
+
+channel_8 <-
+    switch(
+    params$lang,
+    en = "Events for non-academic practitioners",
+    de = "Events für nicht-akademische Fachkräfte",
+    fr = "Manifestations à l’intention du personnel non académique"
+  )
+
+channel_9 <-
+    switch(
+    params$lang,
+    en = "Events for a non-academic public",
+    de = "Events für die nicht-akademische Öffentlichkeit",
+    fr = "Manifestations à l’intention d’un public non académique"
+  )
+
+tribble(
+  ~var,      ~answer, ~n,
+  channel_1, "No",    301,
+  channel_1, "Yes",   32,
+  channel_2, "No",    196,
+  channel_2, "Yes",   150,
+  channel_3, "No",    198,
+  channel_3, "Yes",   145,
+  channel_4, "No",    74,
+  channel_4, "Yes",   280,
+  channel_5, "No",    219,
+  channel_5, "Yes",   128,
+  channel_6, "No",    228,
+  channel_6, "Yes",   115,
+  channel_7, "No",    226,
+  channel_7, "Yes",   116,
+  channel_8, "No",    233,
+  channel_8, "Yes",   110,
+  channel_9, "No",    207,
+  channel_9, "Yes",   136
+) |>
+  mutate(
+    prop = n / sum(n),
+    order = prop[answer == "Yes"],
+    .by = var
+  ) |>
+  filter(answer == "Yes") |>
+  prep_data(answer_type = "skip", lang = params$lang) |>
+  make_plot(
+    x = prop,
+    y = var,
+    fill = answer
+  )
+
+```
+::: caption
+Données : les chiffres utilisés pour élaborer le présent graphique ont été reproduits sur base de l’étude du ZSI etse réfèrent au tableau 11 (p. 63) de l’étude.
+:::
+:::
+
+### Le rôle des innovations sociales au regard de la science
+
+Si les projets encouragés par le FNS contribuent à l’innovation sociale, l’étude du ZSI fait aussi apparaître que les résultats de la recherche demeurent souvent cantonnés au domaine scientifique et ne sont pas directement mis en œuvre dans la pratique. Cela ne signifie pas pour autant que la science n’a pas atteint son objectif dans la mesure où elle a permis de générer de nouvelles connaissances et de recueillir des expériences significatives. De plus, il convient de prendre en considération que la recherche est évolutive et donc orientée sur le long terme. D’autre part, il est souvent impossible de savoir quelle découverte actuelle conduira à l’innovation sociale de demain.
+
+L’étude met parallèlement en exergue que l’innovation sociale n’en constitue pas moins une réelle motivation : les chercheuses et chercheurs réfléchissent aux bénéfices potentiels que leurs recherches pourraient receler pour la société et souhaitent contribuer à accroître le bien-être de la population. Ils invitent souvent des groupes non académiques à participer à leurs travaux, tout comme ils recourent à divers médias pour diffuser leurs résultats et les rendre accessibles à un large public. En conclusion, on peut donc retenir que l’innovation sociale joue un rôle important pour la science comme pour les scientifiques – même si chaque projet ne se traduit pas immédiatement par un changement social.
+
+### Informations complémentaires
+<p>
+<a class="button-blue" href="https://zenodo.org/records/7756474">« Social Innovation » - étude du ZSI</a>
+<br>
+<a class="button-blue" href="https://www.snf.ch/fr/yFkotlXx9Y2cS2Bj/news/eclairage-sur-linnovation-sociale-dans-la-recherche">Actualité du FNS relative à l’étude « Social Innovation »</a>
+</p>
+
+Les données, le texte et le code de ce récit de données sont [disponibles sur Github](`r params$github_url`) et [archivés sur Zenodo](`r params$doi`). <br>DOI: `r str_remove(params$doi, "https://doi.org/")`
+
+```{r prevent-internal-snsf-packages, include=FALSE}
+#| include: false
+
+# Internal SNSF packages must not be used in data stories, as their
+# pre-processing functions are internal and the corporate design differs from
+# the data portal.
+if (any(c("snfverse", "snf.preprocessing", "snf.plot") %in% 
+        loadedNamespaces())) {
+  stop(glue(
+    "You must not use internal SNSF packages in data stories.",
+    " Please resort to snf.datastory."
+  ))
+}
+```

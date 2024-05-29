@@ -1,0 +1,540 @@
+---
+title: "`r params$title`"
+format:
+  html:
+    # To use instead of self-contained that has been deprecated
+    # Using custom page layout (via 'style.css')
+    # Open link in a new window by default
+    # Display footnotes in pop-up window when hovering on it
+    toc: false
+    css: ["style.css"]
+    mainfont: Theinhardt
+    fontsize: "16px"
+    embed-resources: true
+    page-layout: custom
+    link-external-newwindow: true
+    footnotes-hover: true
+params:
+  title: "Wie viel Forschung kommt in die Praxis?"
+  publication_date: ""
+  lang: "de"
+  doi: ""
+  github_url: ""
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r general-setup, include=FALSE}
+
+## This file contains the ENGLISH version of the data story
+
+# Set general chunk options
+knitr::opts_chunk$set(
+  echo = FALSE,
+  fig.showtext = TRUE,
+  fig.retina = 3,
+  fig.align = "center",
+  warning = FALSE,
+  message = FALSE
+)
+
+# Install snf.datastory package if not available, otherwise load it
+if (!require("snf.datastory")) {
+  if (!require("devtools")) {
+    install.packages("devtools")
+    library(devtools)
+  }
+  install_github("snsf-data/snf.datastory")
+  library(snf.datastory)
+}
+
+# Load packages
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(conflicted)
+library(jsonlite)
+library(here)
+library(glue)
+library(ggiraph)
+library(showtext)
+library(systemfonts)
+
+# Conflict preferences
+conflict_prefer("filter", "dplyr")
+conflict_prefer("lag", "dplyr")
+conflict_prefer("get_datastory_theme", "snf.datastory")
+conflict_prefer("get_datastory_scheme", "snf.datastory")
+
+source(here("R/helpers.R"))
+
+is_theinhardt_available <- file.exists(here("fonts", "TheinhardtReg.otf"))
+
+if (is_theinhardt_available) {
+  
+  sysfonts::font_add(
+    family = "Theinhardt",
+    regular = here("fonts", "TheinhardtReg.otf"),
+    bold = here("fonts", "TheinhardtBold.otf"),
+    bolditalic = here("fonts", "TheinhardtBoldIt.otf"),
+    italic = here("fonts", "TheinhardtRegIt.otf"),
+  )
+  
+  # Need to register the font to allow its use by ggiraph when creating SVG
+  # files.
+  if (!font_family_exists("Theinhardt")) {
+    
+    # Register existing/downloaded fonts
+    register_font(
+      name = "Theinhardt",
+      plain = list("fonts/TheinhardtReg.otf", 0),
+      bold = list("fonts/TheinhardtBold.otf", 0),
+      italic = list("fonts/TheinhardtRegIt.otf", 0),
+      bolditalic = list("fonts/TheinhardtBoldIt.otf", 0)
+    )
+  }
+  
+  font <- "Theinhardt"
+  
+} else {
+  
+  font <- "Arial"
+  
+}
+
+# Need if we want to use the registered font in ggiraph plots
+showtext_auto()
+
+# Increase showtext package font resolution
+showtext_opts(dpi = 320)
+
+# Set the locale for date formatting (Windows)
+Sys.setlocale(
+  "LC_TIME",
+  switch(
+    params$lang,
+    en = "English",
+    de = "German",
+    fr = "French"
+  )
+)
+
+# Create function to print number with local language-specific format
+print_num <- function(x) snf.datastory::print_num(x, lang = params$lang)
+
+# Knitr hook for local formatting of printed numbers
+knitr::knit_hooks$set(
+  inline <- function(x) {
+    if (!is.numeric(x)) {
+      x
+    } else {
+      print_num(x)
+    }
+  }
+)
+
+# Function that returns the desired language version of a string, given three
+# language strings are provided to the function.
+translate <- function(en_string = "NOT TRANSLATED",
+                      de_string = "NOT TRANSLATED",
+                      fr_string = "NOT TRANSLATED",
+                      lang = "de") {
+  
+  string <-
+    case_when(
+      lang == "en" ~ en_string, 
+      lang == "de" ~ de_string, 
+      lang == "fr" ~ fr_string, 
+      TRUE ~ "NO VALID LANGUAGE SPECIFIED"
+    )
+  
+  return(string)
+  
+}
+
+```
+
+```{r print-header-infos}
+#| results: asis
+
+# Add publication date to header
+cat(format(as_datetime(params$publication_date), "%d.%m.%Y"))
+```
+
+```{r story-specific-setup}
+#| include: false
+
+dat <-
+  read_delim(here("data/SIVOCS_data.csv"), delim = "\t") |>
+  rename_with(\(x) str_extract(x, "^[^(\\s\\.)]+"))
+
+```
+
+
+**In allen Fachdisziplinen finden Forschungsergebnisse aus SNF-geförderten Projekten ihren Weg in die gelebte Praxis und verknüpfen Wissenschaft mit Gesellschaft. Aber wie genau sieht diese Verknüpfung aus?**
+
+Wie viel soziale Innovation in SNF-geförderten Projekten steckt, sollte in einer Studie herausgefunden werden, die der SNF beim Zentrum für Soziale Innovation Wien (ZSI) in Auftrag gegeben hat. Befragt wurden Forschende, die im Zuge der thematisch offenen Projektförderung sowie des Programms Sinergia eine Finanzierung vom SNF erhalten hatten. Insgesamt haben über 360 Beitragsempfangende an der Studie teilgenommen und Fragen rund um das facettenreiche Thema der sozialen Innovation beantwortet.
+
+Der Begriff ist dabei gar nicht so leicht zu fassen und es gibt unterschiedliche Definitionen darüber, was er genau bedeutet. Wir definieren soziale Innovationen hier in aller Kürze als Neuheiten, die aus Forschungsprojekten resultieren, eine praktische Anwendung in der Gesellschaft finden und so direkt zur Lösung gesellschaftlicher Fragen und Probleme beitragen. Es handelt sich also um Forschungsergebnisse, die direkt auf einen unmittelbaren Nutzen für bzw. eine unmittelbare Auswirkung auf die Gesellschaft abzielen.
+
+### Einen gesellschaftlichen Nutzen mitdenken
+
+Die Implementierung von Forschungsergebnissen in die Praxis ist aber nur der letzte Schritt eines langen Prozesses. Die Weichen für soziale Innovation werden nämlich schon viel früher gestellt: in den Köpfen der Forschenden. Denn für soziale Innovationen braucht es zuallererst Wissenschaftler:innen, die Beiträge zu gesellschaftlich relevanten Themen auch ausserhalb des akademischen Bereichs leisten wollen. Dass dies vielfach so ist, spiegelt sich in der Studie wider. Sie zeigt, dass 65\% aller befragten Beitragsempfangenden motiviert sind, mit ihrer Forschung zur Verbesserung des gesellschaftlichen Lebens beizutragen. Drei Viertel davon gaben sogar an, «sehr motiviert» zu sein. Bei einem Grossteil der Forschenden wird also ein gesellschaftlicher Nutzen über den wissenschaftlichen Arbeitsbereich hinaus mitgedacht. Und das häufig schon von Beginn an, bei der Konzeption ihres Forschungsprojekts. 
+
+::: plot-box
+<div class="plot-title">Viele Beitragsempfangende sind motiviert, mit ihrer Forschung das menschliche Wohlergehen zu verbessern</div>
+```{r plot-1}
+#| out-width: "100%"
+#| fig-height: 2.25
+
+tribble(
+  ~var,                                                     ~answer, ~n,
+  "Motivation, ein Phänomen zu verstehen",                  "Yes",   0.84,
+  "Motivation, ein Phänomen zu verstehen",                  "No",    0.16,
+  "Motivation, ein Problem zu lösen",                       "Yes",   0.82,
+  "Motivation, ein Problem zu lösen",                       "No",    0.18,
+  "Motivation, das menschliche Wohlergehen zu verbessern", "Yes",   0.65,
+  "Motivation, das menschliche Wohlergehen zu verbessern", "No",    0.35,
+) |>
+  mutate(
+    prop = n / sum(n),
+    order = prop[answer == "Yes"],
+    .by = var
+  ) |>
+  filter(answer == "Yes") |>
+  prep_data(answer_type = "skip", lang = params$lang) |>
+  make_plot(
+    x = prop,
+    y = var,
+    fill = answer
+  )
+
+```
+::: caption
+Daten: Die Grafik bezieht sich auf Fig. 12 (Seite 42) der ZSI-Studie. Die Kategorien «4-6» und «7-10…fully» wurden zu «motiviert» zusammengefasst.
+:::
+:::
+
+::: hide-mobile
+::: info-box-mint
+<div>
+<figure class="figure-left">
+<img src="data/img/SilvestroMicera.jpg" class="img-left" />
+<figcaption>© EPFL/Hillary Sanctuary </figcaption>
+</figure>
+</div>
+<div>
+<h3>Die Forschung von Silvestro Micera: Prothesen, mit denen man fühlen kann</h3>
+::: p-before-button
+«Den Leuten zu helfen war und ist immer meine primäre Motivation», erzählt Silvestro Micera, Professor für Neurotechnologie an der EPFL. Für Personen, die Gliedmassen verloren haben, entwickelt er gemeinsam mit seinem Forschungsteam neuartige Prothesen. Neuartig sind diese deswegen, weil die Betroffenen sie nicht nur bewegen, sondern auch mit ihnen fühlen können. Micera hat im Zuge eines SNF-geförderten Projekts beispielsweise eine Handprothese entwickelt, die erstmals das Spüren von Temperaturen ermöglicht. Künstliche Sensoren in der Prothese senden dabei elektronische Reize an die noch bestehenden Nervenenden im Arm. Der elektronische Impuls wird dann in ein Signal übersetzt, das das Gehirn entsprechend verstehen kann. Nach einer ähnlichen Technologie funktionieren auch die Beinprothesen, an denen Micera geforscht hat. Diese ermöglichen ebenso die Vermittlung von sensorischen Informationen. Das bringt viele Erleichterungen für die Patientinnen und Patienten. Beispielsweise können sie schneller und sicherer gehen und Schmerzen können nachweislich verringert werden. Während des gesamten Forschungsprozesses stand Silvestro Micera in engem Austausch mit den Betroffenen, um bestmöglich auf deren Bedürfnisse einzugehen. Sein Projekt resultierte in der Gründung eines Unternehmens, das an der Produktion und Vertreibung der Beinprothesen arbeitet. So können diese in Zukunft vielen Patientinnen und Patienten zur Verfügung gestellt werden.
+:::
+</div>
+<p>
+<a class="button-blue" href="https://data.snf.ch/grants?applicant=605966">Link zu Silvestro Miceras SNF-geförderten Projekten</a>
+</p>
+:::
+:::
+
+::: {.hide-tablet .hide-desktop}
+::: info-box-mint
+<h3>Die Forschung von Silvestro Micera: Prothesen, mit denen man fühlen kann</h3>
+<div>
+<figure class="figure-mob">
+<img src="data/img/SilvestroMicera.jpg" class="img-mob" />
+<figcaption class="figcaption">© EPFL/Hillary Sanctuary </figcaption>
+</figure>
+</div>
+<div>
+::: p-before-button
+«Den Leuten zu helfen war und ist immer meine primäre Motivation», erzählt Silvestro Micera, Professor für Neurotechnologie an der EPFL. Für Personen, die Gliedmassen verloren haben, entwickelt er gemeinsam mit seinem Forschungsteam neuartige Prothesen. Neuartig sind diese deswegen, weil die Betroffenen sie nicht nur bewegen, sondern auch mit ihnen fühlen können. Micera hat im Zuge eines SNF-geförderten Projekts beispielsweise eine Handprothese entwickelt, die erstmals das Spüren von Temperaturen ermöglicht. Künstliche Sensoren in der Prothese senden dabei elektronische Reize an die noch bestehenden Nervenenden im Arm. Der elektronische Impuls wird dann in ein Signal übersetzt, das das Gehirn entsprechend verstehen kann. Nach einer ähnlichen Technologie funktionieren auch die Beinprothesen, an denen Micera geforscht hat. Diese ermöglichen ebenso die Vermittlung von sensorischen Informationen. Das bringt viele Erleichterungen für die Patientinnen und Patienten. Beispielsweise können sie schneller und sicherer gehen und Schmerzen können nachweislich verringert werden. Während des gesamten Forschungsprozesses stand Silvestro Micera in engem Austausch mit den Betroffenen, um bestmöglich auf deren Bedürfnisse einzugehen. Sein Projekt resultierte in der Gründung eines Unternehmens, das an der Produktion und Vertreibung der Beinprothesen arbeitet. So können diese in Zukunft vielen Patientinnen und Patienten zur Verfügung gestellt werden.
+:::
+</div>
+<p>
+<a class="button-blue" href="https://data.snf.ch/grants?applicant=605966">Link zu Silvestro Miceras SNF-geförderten Projekten</a>
+</p>
+:::
+:::
+
+### Zusammenarbeiten
+
+Da sozial innovative Projekte auf eine gesellschaftliche Wirkung abzielen, werden im Laufe des Forschungsprozesses häufig Personen integriert, die nicht im akademischen Bereich tätig sind. So wie bei Silvestro Micera, der für sein Projekt unter anderem mit Betroffenen, Krankenhauspersonal und Unternehmenspartner:innen im Austausch war. Auch nach solchen transdisziplinären Zusammenarbeiten hat die Studie gefragt. Rund ein Viertel der Befragten gab an, Personen von administrativen Institutionen, Sozial- und Bildungseinrichtungen und Unternehmen sowie diverse Einzelpersonen mehr oder weniger stark in ihre Projekte miteinbezogen zu haben. 15\% arbeiteten mit NGO zusammen. Mit 34\% sind Medienvertreter:innen die grösste ausserakademische Gruppe, mit der zusammengearbeitet wurde. Am häufigsten nahmen die ausserakademischen Gruppen eine beratende Funktion ein, so die Studie. Es zeichnete sich ausserdem ab, dass die Teilhaben nicht erst zu Ende des Projekts stattfanden, sondern häufig schon in früheren Phasen.
+
+
+::: plot-box
+<div class="plot-title">Wie häufig werden verschiedene Teile der Gesellschaft in den Forschungsprozess involviert?</div>
+```{r plot-2, group-involved}
+#| out-width: "100%"
+#| fig-height: 4
+
+dat |>
+  pivot_data("groupsInvolved") |>
+  prep_data(answer_type = "yes_no", lang = params$lang) |>
+  make_plot(
+    x = prop,
+    y = var,
+    fill = answer
+  )
+
+```
+::: caption
+Daten: Die für diese Grafik verwendeten Daten wurden vom ZSI zur Verfügung gestellt. Die Grafik bezieht sich auf Fig. 7 (Seite 25) der Studie. Die Kategorien «only marginally» und «quite centrally» wurden zu «ja» zusammengefasst.
+:::
+:::
+
+::: hide-mobile
+::: info-box-ssh
+<div>
+<figure class="figure-right">
+<img src="data/img/ChristianBrühwiler.jpg" class="img-right" />
+<figcaption>© Patrick Massen</figcaption>
+</figure>
+</div>
+<div>
+<h3>Die Forschung von Christian Brühwiler: Kompetenzen für Lehrpersonen besser vermitteln</h3>
+::: p-before-button
+Als Lehrperson braucht man nicht nur gute fachliche und fachdidaktische Kompetenzen. Auch pädagogische wie soziale Kompetenzen sind essenziell. Diese helfen den angehenden Lehrpersonen, herausfordernde zwischenmenschliche Situationen zu lösen und gut auf die Schülerinnen und Schüler einzugehen. Christian Brühwiler ist Prorektor an der Pädagogischen Hochschule St. Gallen und beschäftigt sich mit der Frage, wie sich pädagogische Kompetenzen in der Lehrpersonenausbildung besser vermitteln lassen. «Im ersten Schritt ist es wichtig zu wissen, wie man solche Kompetenzen überhaupt messen kann», erzählt Brühwiler. Gemeinsam mit seinem Team hat er hierzu im Zuge eines SNF-geförderten Projekts einen Test entwickelt. Dieser arbeitet mit Videos, die verschiedene Unterrichtssituationen zeigen. Die Lehrpersonen sollen anschliessend beschreiben, wie sie in der dargestellten Situation handeln würden. So können wertvolle Informationen über ihre pädagogischen Kompetenzen gewonnen werden. Die Testergebnisse bieten eine wichtige Grundlage für die Weiterentwicklung des Studiencurriculums und der Berufseinführung. Denn dadurch lässt sich rückschliessen, welche Aspekte in der Lehrpersonenausbildung bereits gut wirksam sind und welche mehr in den Blick genommen werden müssen. Davon ausgehend können dann Konzepte erarbeitet werden, wie sich Lehrpersonal pädagogische Kompetenzen in Zukunft leichter aneignen kann. Von einer besseren Ausbildung profitieren dabei nicht nur die Lehrpersonen selbst: In weiterer Folge können sie in ihrem Berufsalltag Schülerinnen und Schüler besser unterstützen.
+:::
+</div>
+<p>
+<a class="button-blue" href="https://data.snf.ch/grants?applicant=74176">Link zu Christian Brühwilers SNF-geförderten Projekten</a>
+</p>
+:::
+:::
+
+::: {.hide-tablet .hide-desktop}
+::: info-box-ssh
+<h3>Die Forschung von Christian Brühwiler: Kompetenzen für Lehrpersonen besser vermitteln</h3>
+<div>
+<figure class="figure-mob">
+<img src="data/img/ChristianBrühwiler.jpg" class="img-mob" />
+<figcaption class="figcaption">© Patrick Massen</figcaption>
+</figure>
+</div>
+<div>
+::: p-before-button
+Als Lehrperson braucht man nicht nur gute fachliche und fachdidaktische Kompetenzen. Auch pädagogische wie soziale Kompetenzen sind essenziell. Diese helfen den angehenden Lehrpersonen, herausfordernde zwischenmenschliche Situationen zu lösen und gut auf die Schülerinnen und Schüler einzugehen. Christian Brühwiler ist Prorektor an der Pädagogischen Hochschule St. Gallen und beschäftigt sich mit der Frage, wie sich pädagogische Kompetenzen in der Lehrpersonenausbildung besser vermitteln lassen. «Im ersten Schritt ist es wichtig zu wissen, wie man solche Kompetenzen überhaupt messen kann», erzählt Brühwiler. Gemeinsam mit seinem Team hat er hierzu im Zuge eines SNF-geförderten Projekts einen Test entwickelt. Dieser arbeitet mit Videos, die verschiedene Unterrichtssituationen zeigen. Die Lehrpersonen sollen anschliessend beschreiben, wie sie in der dargestellten Situation handeln würden. So können wertvolle Informationen über ihre pädagogischen Kompetenzen gewonnen werden. Die Testergebnisse bieten eine wichtige Grundlage für die Weiterentwicklung des Studiencurriculums und der Berufseinführung. Denn dadurch lässt sich rückschliessen, welche Aspekte in der Lehrpersonenausbildung bereits gut wirksam sind und welche mehr in den Blick genommen werden müssen. Davon ausgehend können dann Konzepte erarbeitet werden, wie sich Lehrpersonal pädagogische Kompetenzen in Zukunft leichter aneignen kann. Von einer besseren Ausbildung profitieren dabei nicht nur die Lehrpersonen selbst: In weiterer Folge können sie in ihrem Berufsalltag Schülerinnen und Schüler besser unterstützen.
+:::
+</div>
+<p>
+<a class="button-blue" href="https://data.snf.ch/grants?applicant=74176">Link zu Christian Brühwilers SNF-geförderten Projekten</a>
+</p>
+:::
+:::
+
+### Wo die Forschungsergebnisse zum Einsatz kommen
+
+Die meisten Studienteilnehmenden gaben an, dass ihre Forschungsergebnisse vor allem zu einer Verbesserung von Prozessen, Produkten oder Serviceangeboten für die allgemeine Bevölkerung geführt haben. Für etwas über ein Viertel der befragten Beitragsempfangenden sind administrative Institutionen jene Orte, an denen ihre Forschungen Anwendung fanden. 25\% gaben an, dass ihre Forschungsergebnisse in Unternehmen genutzt wurden, ähnlich viele nannten Sozial- und Bildungsinstitutionen als Anwendungsorte. Die Forschungsergebnisse von 20\% führten zu Innovationen für bestimmte soziale Gruppen, jene von 15\% wurden in NGO zur Umsetzung gebracht.
+
+::: plot-box
+<div class="plot-title">Die allgemeine Bevölkerung profitiert am meisten von sozialer Innovation</div>
+```{r plot-3, impact-target-group}
+#| out-width: "100%"
+#| fig-height: 4
+
+dat |>
+  pivot_data("impactTargetGroup") |>
+  prep_data(answer_type = "lmh", lang = params$lang) |>
+  make_plot(
+    x = prop,
+    y = var,
+    fill = answer
+  )
+
+```
+::: caption
+Daten: Die für diese Grafik verwendeten Daten wurden vom ZSI zur Verfügung gestellt. Die Grafik bezieht sich auf Fig. 17 (Seite 55) der Studie. Die Kategorien «4-6» und «7-10…fully» wurden zu einer zusammengefasst.
+:::
+:::
+
+::: hide-mobile
+::: info-box-ls
+<div>
+<figure class="figure-left">
+<img src="data/img/PetraHüppi.jpg" class="img-left" />
+<figcaption><figcaption>© Craig Cutler, @craigcutlerstudio</figcaption></figcaption>
+</figure>
+</div>
+<div>
+<h3>Die Forschung von Petra Hüppi: Musik für frühgeborene Babys</h3>
+::: p-before-button
+Das Krankenhaus ist für Petra Hüppi der Ort, an dem ihre Forschungsergebnisse in die Praxis kommen. Sie ist als Professorin für Pädiatrie in der Klinik für Entwicklung und Wachstum des Genfer universitätsmedizinischen Zentrums tätig und spezialisiert auf die Gehirnentwicklung bei Frühgeburten. Da das Gehirn von frühgeborenen Babys im Mutterleib nicht genügend Zeit hatte, um ausreichend zu reifen, kommt es später häufig zu Entwicklungsstörungen wie Lern- oder Konzentrationsschwierigkeiten. Frühgeborene Babys sind nach der Geburt meist übermässigem Stress ausgesetzt, denn sie müssen in den meisten Fällen erst in den Brutkästen der Neonatologie-Station aufgepäppelt werden. Um diesen Stress zu reduzieren und späteren Entwicklungsstörungen vorzubeugen, hat Petra Hüppi auf Musik zurückgegriffen. Mithilfe des Musikers Andreas Vollenweider hat sie getestet, welche Musikinstrumente auf die Babys besonders entspannend wirken. Mit diesem Wissen hat Vollenweider anschliessend drei Stücke für das SNF-Forschungsprojekt komponiert, die die Babys in drei Situationen unterstützen: beim Einschlafen, beim Aufwachen und in aktiven Wachphasen. Und tatsächlich zeigte die Musik Wirkung. Bei jenen Babys, die die Musik gehört hatten, zeigten sich weniger negative Effekte der Frühgeburtlichkeit. Gewisse Hirnregionen sind schneller und besser gereift. Wer jetzt neugierig geworden ist, kann die Musik unter folgendem Link anhören: [Music in premature infants enhances high-level cognitive brain networks](https://www.pnas.org/doi/abs/10.1073/pnas.1817536116)
+:::
+</div>
+<p>
+<a class="button-blue" href="https://data.snf.ch/grants?applicant=66813">Link zu Petra Hüppis SNF-geförderten Projekten</a>
+</p>
+:::
+:::
+
+::: {.hide-tablet .hide-desktop}
+::: info-box-ls
+<h3>Die Forschung von Petra Hüppi: Musik für frühgeborene Babys</h3>
+<div>
+<figure class="figure-mob">
+<img src="data/img/PetraHüppi.jpg" class="img-mob" />
+<figcaption class="figcaption"><figcaption>© Craig Cutler, @craigcutlerstudio</figcaption></figcaption>
+</figure>
+</div>
+<div>
+::: p-before-button
+Das Krankenhaus ist für Petra Hüppi der Ort, an dem ihre Forschungsergebnisse in die Praxis kommen. Sie ist als Professorin für Pädiatrie in der Klinik für Entwicklung und Wachstum des Genfer universitätsmedizinischen Zentrums tätig und spezialisiert auf die Gehirnentwicklung bei Frühgeburten. Da das Gehirn von frühgeborenen Babys im Mutterleib nicht genügend Zeit hatte, um ausreichend zu reifen, kommt es später häufig zu Entwicklungsstörungen wie Lern- oder Konzentrationsschwierigkeiten. Frühgeborene Babys sind nach der Geburt meist übermässigem Stress ausgesetzt, denn sie müssen in den meisten Fällen erst in den Brutkästen der Neonatologie-Station aufgepäppelt werden. Um diesen Stress zu reduzieren und späteren Entwicklungsstörungen vorzubeugen, hat Petra Hüppi auf Musik zurückgegriffen. Mithilfe des Musikers Andreas Vollenweider hat sie getestet, welche Musikinstrumente auf die Babys besonders entspannend wirken. Mit diesem Wissen hat Vollenweider anschliessend drei Stücke für das SNF-Forschungsprojekt komponiert, die die Babys in drei Situationen unterstützen: beim Einschlafen, beim Aufwachen und in aktiven Wachphasen. Und tatsächlich zeigte die Musik Wirkung. Bei jenen Babys, die die Musik gehört hatten, zeigten sich weniger negative Effekte der Frühgeburtlichkeit. Gewisse Hirnregionen sind schneller und besser gereift. Wer jetzt neugierig geworden ist, kann die Musik unter folgendem Link anhören: [Music in premature infants enhances high-level cognitive brain networks](https://www.pnas.org/doi/abs/10.1073/pnas.1817536116)
+:::
+</div>
+<p>
+<a class="button-blue" href="https://data.snf.ch/grants?applicant=66813">Link zu Petra Hüppis SNF-geförderten Projekten</a>
+</p>
+:::
+:::
+
+### Forschung unter die Leute bringen
+
+Die Studie zeigt, dass Forschende vielfältige Kanäle nutzen, um ihre Forschungsergebnisse auch ausserhalb der wissenschaftlichen Gemeinschaft sichtbar und für die Öffentlichkeit zugänglich zu machen. Nicht nur können neue, spannende Erkenntnisse dadurch publik gemacht werden. Sondern generell wird die Verbindung zwischen Wissenschaft und Gesellschaft gestärkt. Das bringt Forschung in die Lebenswelt vieler Menschen. Die eigene Institutswebsite wird mit 79\% am meisten zur Verbreitung herangezogen. Etwas weniger als die Hälfte der befragten Forschenden verwenden traditionelle Medien wie Fernsehen oder Zeitung zur Kommunikation, etwa 37\% nutzen die sozialen Medien. Auf Veranstaltungen für ein breites, ausserakademisches Publikum teilen rund 40\% ihre Forschungsergebnisse mit.
+
+::: plot-box
+<div class="plot-title">Forschungsergebnisse werden einer breiteren Öffentlichkeit am häufigsten auf institutionellen Websites zugänglich gemacht</div>
+
+```{r plot-4}
+#| out-width: "100%"
+#| fig-height: 5.5
+
+channel_1 <-
+    switch(
+    params$lang,
+    en = "Policy briefs",
+    de = "Politische Richtlinien",
+    fr = "Directives politiques"
+  )
+
+channel_2 <-
+    switch(
+    params$lang,
+    en = "Traditional media (TV, radio, print)",
+    de = "Traditionelle Medien (TV, Radio, Zeitung)",
+    fr = "Médias traditionnels (TV, radio, journaux)"
+  )
+
+channel_3 <-
+    switch(
+    params$lang,
+    en = "Professional journals and magazines",
+    de = "Fachzeitschriften und -magazine",
+    fr = "Revues et magazines spécialisés"
+  )
+
+channel_4 <-
+    switch(
+    params$lang,
+    en = "Own institutional or project websites",
+    de = "Websites der Forschungsinstitution bzw. des Projekts",
+    fr = "Site Internet de l’institut de recherche ou du projet "
+  )
+
+channel_5 <-
+    switch(
+    params$lang,
+    en = "Social media",
+    de = "Soziale Medien",
+    fr = "Réseaux sociaux"
+  )
+
+channel_6 <-
+    switch(
+    params$lang,
+    en = "Online platforms (data, code sharing)",
+    de = "Online-Plattformen (Data, Code sharing)",
+    fr = "Plateformes en ligne (partage de données, codes)"
+  )
+
+channel_7 <-
+    switch(
+    params$lang,
+    en = "Consultancy",
+    de = "Beratungen",
+    fr = "Consultations"
+  )
+
+channel_8 <-
+    switch(
+    params$lang,
+    en = "Events for non-academic practitioners",
+    de = "Events für nicht-akademische Fachkräfte",
+    fr = "Manifestations à l’intention du personnel non académique"
+  )
+
+channel_9 <-
+    switch(
+    params$lang,
+    en = "Events for a non-academic public",
+    de = "Events für die nicht-akademische Öffentlichkeit",
+    fr = "Manifestations à l’intention d’un public non académique"
+  )
+
+tribble(
+  ~var,      ~answer, ~n,
+  channel_1, "No",    301,
+  channel_1, "Yes",   32,
+  channel_2, "No",    196,
+  channel_2, "Yes",   150,
+  channel_3, "No",    198,
+  channel_3, "Yes",   145,
+  channel_4, "No",    74,
+  channel_4, "Yes",   280,
+  channel_5, "No",    219,
+  channel_5, "Yes",   128,
+  channel_6, "No",    228,
+  channel_6, "Yes",   115,
+  channel_7, "No",    226,
+  channel_7, "Yes",   116,
+  channel_8, "No",    233,
+  channel_8, "Yes",   110,
+  channel_9, "No",    207,
+  channel_9, "Yes",   136
+) |>
+  mutate(
+    prop = n / sum(n),
+    order = prop[answer == "Yes"],
+    .by = var
+  ) |>
+  filter(answer == "Yes") |>
+  prep_data(answer_type = "skip", lang = params$lang) |>
+  make_plot(
+    x = prop,
+    y = var,
+    fill = answer
+  )
+
+```
+::: caption
+Daten: Die für diese Grafik verwendeten Daten wurden der ZSI-Studie entnommen und beziehen sich auf Tabelle 11 (Seite 63) der Studie.
+:::
+:::
+
+### Die Rolle von sozialen Innovationen in der Wissenschaft
+
+Soziale Innovation kommt in SNF-geförderten Projekten vor. Aber die Studie des ZSI Wien zeigt auch: Oftmals bleiben Forschungsergebnisse im wissenschaftlichen Bereich und werden nicht direkt als soziale Innovation in die Praxis umgesetzt. Das bedeutet aber nicht, dass die Wissenschaft hier ihren Zweck verfehlt, denn es wurden neue Erkenntnisse herausgefunden und wichtige Erfahrungen gesammelt. Zudem ist Forschung oftmals aufbauend und demnach langfristig ausgelegt. Schlicht weiss man in vielen Fällen nicht, was in Zukunft einmal zu einer sozialen Innovation führen wird. 
+
+Gleichzeitig zeigt die Studie aber auch auf, dass soziale Innovation eine relevante Motivation ist: Forschende denken einen potenziellen gesellschaftlichen Nutzen mit und sind motiviert, etwas zu einem gesteigerten Gemeinschaftswohl beizutragen. Dazu werden häufig ausserakademische Gruppen zur Zusammenarbeit gewonnen. Ausserdem nutzen die Forschenden zur Verbreitung ihrer Forschungsergebnisse diverse Medien, um sie auch einer breiten Öffentlichkeit zugänglich zu machen. Man kann also festhalten: Soziale Innovation spielt eine Rolle in der Wissenschaft und für die Forschenden – auch wenn nicht aus jedem Projekt sofort eine gesellschaftliche Veränderung resultieren kann. 
+
+### Anhang
+<p>
+<a class="button-blue" href="https://zenodo.org/records/7756474">«Social Innovation»-Studie des ZSI</a>
+<br>
+<a class="button-blue" href="https://www.snf.ch/de/yFkotlXx9Y2cS2Bj/news/studie-zu-sozialer-innovation-in-der-forschung">SNF-News zur «Social Innovation»-Studie</a>
+</p>
+
+Daten, Text und Code dieser Datengeschichte sind [auf Github verfügbar](`r params$github_url`) und [auf Zenodo archiviert](`r params$doi`).<br>DOI: `r str_remove(params$doi, "https://doi.org/")`
+
+```{r prevent-internal-snsf-packages, include=FALSE}
+#| include: false
+
+# Internal SNSF packages must not be used in data stories, as their
+# pre-processing functions are internal and the corporate design differs from
+# the data portal.
+if (any(c("snfverse", "snf.preprocessing", "snf.plot") %in% 
+        loadedNamespaces())) {
+  stop(glue(
+    "You must not use internal SNSF packages in data stories.",
+    " Please resort to snf.datastory."
+  ))
+}
+```

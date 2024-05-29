@@ -1,0 +1,566 @@
+---
+title: "`r params$title`"
+format:
+  html:
+    toc: false
+    css: ["style.css"]
+    mainfont: Theinhardt
+    fontsize: "16px"
+    # To use instead of self-contained that has been deprecated
+    embed-resources: true
+    # Using custom page layout (via 'style.css')
+    page-layout: custom
+    # Open link in a new window by default
+    link-external-newwindow: true
+    # Display footnotes in pop-up window when hovering on it
+    footnotes-hover: true
+params:
+  title: ""
+  publication_date: ""
+  lang: "en"
+  doi: ""
+  github_url: ""
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r general-setup, include=FALSE}
+
+## This file contains the ENGLISH version of the data story
+
+# Set general chunk options
+knitr::opts_chunk$set(
+  echo = FALSE,
+  fig.showtext = TRUE,
+  fig.retina = 3,
+  fig.align = "center",
+  warning = FALSE,
+  message = FALSE
+)
+
+# Install snf.datastory package if not available, otherwise load it
+if (!require("snf.datastory")) {
+  if (!require("devtools")) {
+    install.packages("devtools")
+    library(devtools)
+  }
+  install_github("snsf-data/snf.datastory")
+  library(snf.datastory)
+}
+
+# Load packages
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(conflicted)
+library(jsonlite)
+library(here)
+library(glue)
+library(ggiraph)
+library(showtext)
+library(systemfonts)
+
+# Conflict preferences
+conflict_prefer("filter", "dplyr")
+conflict_prefer("lag", "dplyr")
+conflict_prefer("get_datastory_theme", "snf.datastory")
+conflict_prefer("get_datastory_scheme", "snf.datastory")
+
+source(here("R/helpers.R"))
+
+is_theinhardt_available <- file.exists(here("fonts", "TheinhardtReg.otf"))
+
+if (is_theinhardt_available) {
+  
+  sysfonts::font_add(
+    family = "Theinhardt",
+    regular = here("fonts", "TheinhardtReg.otf"),
+    bold = here("fonts", "TheinhardtBold.otf"),
+    bolditalic = here("fonts", "TheinhardtBoldIt.otf"),
+    italic = here("fonts", "TheinhardtRegIt.otf"),
+  )
+  
+  # Need to register the font to allow its use by ggiraph when creating SVG
+  # files.
+  if (!font_family_exists("Theinhardt")) {
+    
+    # Register existing/downloaded fonts
+    register_font(
+      name = "Theinhardt",
+      plain = list("fonts/TheinhardtReg.otf", 0),
+      bold = list("fonts/TheinhardtBold.otf", 0),
+      italic = list("fonts/TheinhardtRegIt.otf", 0),
+      bolditalic = list("fonts/TheinhardtBoldIt.otf", 0)
+    )
+  }
+  
+  font <- "Theinhardt"
+  
+} else {
+  
+  font <- "Arial"
+  
+}
+
+# Need if we want to use the registered font in ggiraph plots
+showtext_auto()
+
+# Increase showtext package font resolution
+showtext_opts(dpi = 320)
+
+# Set the locale for date formatting (Windows)
+Sys.setlocale(
+  "LC_TIME",
+  switch(
+    params$lang,
+    en = "English",
+    de = "German",
+    fr = "French"
+  )
+)
+
+# Create function to print number with local language-specific format
+print_num <- function(x) snf.datastory::print_num(x, lang = params$lang)
+
+# Knitr hook for local formatting of printed numbers
+knitr::knit_hooks$set(
+  inline <- function(x) {
+    if (!is.numeric(x)) {
+      x
+    } else {
+      print_num(x)
+    }
+  }
+)
+
+# Function that returns the desired language version of a string, given three
+# language strings are provided to the function.
+translate <- function(en_string = "NOT TRANSLATED",
+                      de_string = "NOT TRANSLATED",
+                      fr_string = "NOT TRANSLATED",
+                      lang = "en") {
+  
+  string <-
+    case_when(
+      lang == "en" ~ en_string, 
+      lang == "de" ~ de_string, 
+      lang == "fr" ~ fr_string, 
+      TRUE ~ "NO VALID LANGUAGE SPECIFIED"
+    )
+  
+  return(string)
+  
+}
+
+```
+
+```{r print-header-infos}
+#| results: asis
+
+# Add publication date to header
+cat(format(as_datetime(params$publication_date), "%d.%m.%Y"))
+```
+
+```{r story-specific-setup}
+#| include: false
+
+dat <-
+  read_delim(here("data/SIVOCS_data.csv"), delim = "\t") |>
+  rename_with(\(x) str_extract(x, "^[^(\\s\\.)]+"))
+
+```
+
+
+<!-- Short lead (2-3 sentences) in bold -->
+
+**Across all disciplines, research results from SNSF-funded projects find their way into practice and create connections between science and society. But what exactly do these connections look like?**
+
+The SNSF has commissioned a study from the Centre for Social Innovation (ZSI) in Vienna that investigated how much social innovation has resulted from SNSF-funded projects. For this, researchers who received funding from the SNSF as part of either the thematically open Project funding or under the Sinergia programme were surveyed. In total, more than 360 SNSF grant recipients took part in the study and answered questions about the multifaceted topic of social innovation.  
+
+This term, however, is not easy to grasp, as there are various definitions of its precise meaning. In our pragmatic definition, social innovations are new approaches resulting from research aiming to answer social questions and solve societal issues in practice. These research results directly aim to benefit society and have a specific and explicitly positive societal impact. 
+
+### Societal benefit in focus 
+
+The implementation of research findings in practice is only the last step in a long process. Social innovation already starts much earlier on: in the minds of the researchers. Because first and foremost, social innovation requires scientists who want to make contributions to socially relevant topics not just within but also outside of academia. The ZSI study demonstrates that this is often the case. It shows that 65\% of all surveyed grant recipients are motivated by the prospect of their research contributing to societal improvement. Three quarters of them even said they were "very motivated". It is clear that the majority of researchers take the social benefits beyond their scientific field into consideration. And often they do so right from the outset, when designing their research project.
+
+::: plot-box
+<div class="plot-title">Many grant recipients are motivated to use their research to improve the human condition</div>
+```{r plot-1}
+#| out-width: "100%"
+#| fig-height: 2.25
+
+motivation_1 <-
+  switch(
+    params$lang,
+    en = "Motivation to understand a phenomenon",
+    de = "Motivation, ein Phänomen zu verstehen",
+    fr = "Motivation à comprendre un phénomène"
+  )
+
+motivation_2 <-
+  switch(
+    params$lang,
+    en = "Motivation to address a problem",
+    de = "Motivation, ein Problem zu lösen",
+    fr = "Motivation à résoudre un problème"
+  )
+
+motivation_3 <-
+  switch(
+    params$lang,
+    en = "Motivation to improve the human condition",
+    de = "Motivation, das menschliche Wohlergehen zu verbessern",
+    fr = "Motivation à améliorer le bien-être de la population "
+  )
+
+tribble(
+  ~var,         ~answer, ~n,
+  motivation_1, "Yes",   0.84,
+  motivation_1, "No",    0.16,
+  motivation_2, "Yes",   0.82,
+  motivation_2, "No",    0.18,
+  motivation_3, "Yes",   0.65,
+  motivation_3, "No",    0.35,
+) |>
+  mutate(
+    prop = n / sum(n),
+    order = prop[answer == "Yes"],
+    .by = var
+  ) |>
+  filter(answer == "Yes") |>
+  prep_data(answer_type = "skip", lang = params$lang) |>
+  make_plot(
+    x = prop,
+    y = var,
+    fill = answer
+  )
+
+```
+::: caption
+Data: The data used for this graph were reproduced from the ZSI study, relating to Fig. 12 (page 42). The categories "4-6" and "7-10...fully" were summarised as "motivated".
+:::
+:::
+
+::: hide-mobile
+::: info-box-mint
+<div>
+<figure class="figure-left">
+<img src="data/img/SilvestroMicera.jpg" class="img-left" />
+<figcaption>© EPFL/Hillary Sanctuary </figcaption>
+</figure>
+</div>
+<div>
+<h3>Silvestro Micera's research: prostheses that enable you to feel</h3>
+::: p-before-button
+“Helping people has always been my primary motivation,” says Silvestro Micera, Professor of Neuroengineering at EPFL. Together with his team, he develops novel prostheses for people who have lost limbs. They are novel because the people affected can not only move them but also feel with them. As part of an SNSF-funded project, Micera has been the first to develop a hand prosthesis that makes it possible to feel temperatures. Artificial sensors in the prosthesis send electronic stimuli to the remaining nerve endings in the arm. The electronic signal is then translated into a signal that the brain can understand accordingly. The leg prostheses that Micera has been researching work with a similar technology, enabling sensory information to be transmitted. This offers significant relief for patients. For example, they are able to walk faster and more safely, and there is a demonstrable reduction in pain. Silvestro Micera was in close contact with the patients throughout the research process so that he could best respond to their needs. His project led to the founding of a company that is working on the production and distribution of such leg prostheses for many patients.
+:::
+</div>
+<p>
+<a class="button-blue" href="https://data.snf.ch/grants?applicant=605966">Link to Silvestro Micera's SNSF-funded projects</a>
+</p>
+:::
+:::
+
+::: {.hide-tablet .hide-desktop}
+::: info-box-mint
+<h3>Silvestro Micera's research: prostheses that enable you to feel</h3>
+<div>
+<figure class="figure-mob">
+<img src="data/img/SilvestroMicera.jpg" class="img-mob" />
+<figcaption class="figcaption">© EPFL/Hillary Sanctuary </figcaption>
+</figure>
+</div>
+<div>
+::: p-before-button
+“Helping people has always been my primary motivation,” says Silvestro Micera, Professor of Neuroengineering at EPFL. Together with his team, he develops novel prostheses for people who have lost limbs. They are novel because the people affected can not only move them but also feel with them. As part of an SNSF-funded project, Micera has been the first to develop a hand prosthesis that makes it possible to feel temperatures. Artificial sensors in the prosthesis send electronic stimuli to the remaining nerve endings in the arm. The electronic signal is then translated into a signal that the brain can understand accordingly. The leg prostheses that Micera has been researching work with a similar technology, enabling sensory information to be transmitted. This offers significant relief for patients. For example, they are able to walk faster and more safely, and there is a demonstrable reduction in pain. Silvestro Micera was in close contact with the patients throughout the research process so that he could best respond to their needs. His project led to the founding of a company that is working on the production and distribution of such leg prostheses for many patients.
+:::
+</div>
+<p>
+<a class="button-blue" href="https://data.snf.ch/grants?applicant=605966">Link to Silvestro Micera's SNSF-funded projects</a>
+</p>
+:::
+:::
+
+### Collaboration
+
+Since socially innovative projects aim to have a societal impact, people who are not working in academia are often integrated into the research process early on. That was the case with Silvestro Micera: for his project, he was in contact with patients, hospital staff and business partners. The study also investigated such transdisciplinary collaborations. Around a quarter of the respondents stated that in their projects – to a greater or lesser extent – they had involved people from public administration and governmental organizations, welfare and educational institutions and businesses, as well as individual citizens. 15\% worked together with NGO. Media representatives were the largest non-academic group the respondents collaborated with – this applied in 34\% of cases. According to the study, the non-academic groups most frequently took on a consultative role. Participation took place not only at the end of the project but also often in earlier phases.
+
+::: plot-box
+<div class="plot-title">How often are different sections of society involved in the research process?</div>
+```{r plot-2, group-involved}
+#| out-width: "100%"
+#| fig-height: 4
+
+dat |>
+  pivot_data("groupsInvolved") |>
+  prep_data(answer_type = "yes_no", lang = params$lang) |>
+  make_plot(
+    x = prop,
+    y = var,
+    fill = answer
+  )
+
+```
+::: caption
+Data: The data used for this graph was provided by the ZSI. The graph relates to Fig. 7 (page 25) of the study. The categories "only marginally" and "quite centrally" were summarised as "yes".
+:::
+:::
+
+::: hide-mobile
+::: info-box-ssh
+<div>
+<figure class="figure-right">
+<img src="data/img/ChristianBrühwiler.jpg" class="img-right" />
+<figcaption>© Patrick Massen</figcaption>
+</figure>
+</div>
+<div>
+<h3>Christian Brühwiler's research: better communication of teaching skills</h3>
+::: p-before-button
+Teachers don’t just need good subject-specific knowledge. Pedagogic and social skills are also essential. These help future teachers in challenging interpersonal situations and interactions with students. Christian Brühwiler, Vice-Rector of the St. Gallen University of Teacher Education, addresses the question of how pedagogic skills can be better conveyed during teacher training. "As a first step, it’s important to know how to measure such skills," says Brühwiler. Together with his team, he has developed a test for this as part of an SNSF-funded project. He works with videos showing various teaching situations. The teachers are then asked to describe how they would act in the situation presented. In this way, valuable information about their pedagogic skills can be obtained. The test results are an important basis for improving teacher training. They help developing concepts as to how teaching staff can acquire pedagogic skills more easily. And it is not just the teachers who benefit from better training: in their everyday work, future students are the ultimate benefactors.
+:::
+</div>
+<p>
+<a class="button-blue" href="https://data.snf.ch/grants?applicant=74176">Link to Christian Brühwiler's SNSF-funded projects</a>
+</p>
+:::
+:::
+
+::: {.hide-tablet .hide-desktop}
+::: info-box-ssh
+<h3>Christian Brühwiler's research: better communication of teaching skills</h3>
+<div>
+<figure class="figure-mob">
+<img src="data/img/ChristianBrühwiler.jpg" class="img-mob" />
+<figcaption class="figcaption">© Patrick Massen</figcaption>
+</figure>
+</div>
+<div>
+::: p-before-button
+Teachers don’t just need good subject-specific knowledge. Pedagogic and social skills are also essential. These help future teachers in challenging interpersonal situations and interactions with students. Christian Brühwiler, Vice-Rector of the St. Gallen University of Teacher Education, addresses the question of how pedagogic skills can be better conveyed during teacher training. "As a first step, it’s important to know how to measure such skills," says Brühwiler. Together with his team, he has developed a test for this as part of an SNSF-funded project. He works with videos showing various teaching situations. The teachers are then asked to describe how they would act in the situation presented. In this way, valuable information about their pedagogic skills can be obtained. The test results are an important basis for improving teacher training. They help developing concepts as to how teaching staff can acquire pedagogic skills more easily. And it is not just the teachers who benefit from better training: in their everyday work, future students are the ultimate benefactors.
+:::
+</div>
+<p>
+<a class="button-blue" href="https://data.snf.ch/grants?applicant=74176">Link to Christian Brühwiler's SNSF-funded projects</a>
+</p>
+:::
+:::
+
+### Where the research results are applied
+
+Most of the study participants stated that their research results have led to an improvement in processes, products or service offerings for the general population. For over a quarter of the surveyed grant recipients, their research was applied in public administration and governmental organizations. 25\% stated that their research results were used in businesses, and a similar number mentioned that they were used by welfare or educational institutions. In 20\% of cases, the research results led to innovations for specific social groups, while in 15\% of cases they were implemented in NGO.
+
+::: plot-box
+<div class="plot-title">The general population benefits most from social innovation</div>
+```{r plot-3, impact-target-group}
+#| out-width: "100%"
+#| fig-height: 4
+
+dat |>
+  pivot_data("impactTargetGroup") |>
+  prep_data(answer_type = "lmh", lang = params$lang) |>
+  make_plot(
+    x = prop,
+    y = var,
+    fill = answer
+  )
+
+```
+::: caption
+Data: The data used for this graph was provided by the ZSI. The graph relates to Fig. 17 (page 55) of the study. The categories "4-6" and "7-10...fully" were grouped together.
+:::
+:::
+
+::: hide-mobile
+::: info-box-ls
+<div>
+<figure class="figure-left">
+<img src="data/img/PetraHüppi.jpg" class="img-left" />
+<figcaption><figcaption>© Craig Cutler, @craigcutlerstudio</figcaption></figcaption>
+</figure>
+</div>
+<div>
+<h3>Petra Hüppi's research: music for premature babies</h3>
+::: p-before-button
+For Petra Hüppi, the hospital is the place where her research results are put into practice. She is Professor of Pediatrics in the Development and Growth division of the University Hospital of Geneva Medical Center and specialises in brain development in premature infants. Since the brains of premature babies did not have enough time to mature sufficiently in the womb, developmental disorders such as learning or concentration difficulties often occur later on. Premature babies are usually exposed to high levels of stress after birth because often they have to stay in incubators in the neonatal units. Petra Hüppi has turned to music as a way of easing this stress and thus preventing later developmental disorders. With the help of musician Andreas Vollenweider, she wanted to find out which musical instruments have a particularly relaxing effect on babies. Based on this knowledge, Vollenweider then composed three pieces for her SNSF research project that aimed to help babies in three situations: falling asleep, waking up, and during active wakefulness. And the music did indeed have an effect. Those babies who heard the music exhibited fewer adverse effects associated with prematurity, and certain brain regions matured faster and better. If you want to listen to the music, it is available at the following link: [Music in premature infants enhances high-level cognitive brain networks](https://www.pnas.org/doi/abs/10.1073/pnas.1817536116)
+:::
+</div>
+<p>
+<a class="button-blue" href="https://data.snf.ch/grants?applicant=66813">Link to Petra Hüppi's SNSF-funded projects</a>
+</p>
+:::
+:::
+
+::: {.hide-tablet .hide-desktop}
+::: info-box-ls
+<h3>Petra Hüppi's research: music for premature babies</h3>
+<div>
+<figure class="figure-mob">
+<img src="data/img/PetraHüppi.jpg" class="img-mob" />
+<figcaption class="figcaption"><figcaption>© Craig Cutler, @craigcutlerstudio</figcaption></figcaption>
+</figure>
+</div>
+<div>
+::: p-before-button
+For Petra Hüppi, the hospital is the place where her research results are put into practice. She is Professor of Pediatrics in the Development and Growth division of the University Hospital of Geneva Medical Center and specialises in brain development in premature infants. Since the brains of premature babies did not have enough time to mature sufficiently in the womb, developmental disorders such as learning or concentration difficulties often occur later on. Premature babies are usually exposed to high levels of stress after birth because often they have to stay in incubators in the neonatal units. Petra Hüppi has turned to music as a way of easing this stress and thus preventing later developmental disorders. With the help of musician Andreas Vollenweider, she wanted to find out which musical instruments have a particularly relaxing effect on babies. Based on this knowledge, Vollenweider then composed three pieces for her SNSF research project that aimed to help babies in three situations: falling asleep, waking up, and during active wakefulness. And the music did indeed have an effect. Those babies who heard the music exhibited fewer adverse effects associated with prematurity, and certain brain regions matured faster and better. If you want to listen to the music, it is available at the following link: [Music in premature infants enhances high-level cognitive brain networks](https://www.pnas.org/doi/abs/10.1073/pnas.1817536116)
+:::
+</div>
+<p>
+<a class="button-blue" href="https://data.snf.ch/grants?applicant=66813">Link to Petra Hüppi's SNSF-funded projects</a>
+</p>
+:::
+:::
+
+### Bringing research into society
+
+The study shows that researchers use a variety of channels to make their research results visible outside the scientific community and to make it more accessible to a broader public. This strengthens the links between academia and society and brings research into the lives of many people. Used in 79\% of the cases, the institution’s own websites were the most frequent dissemination channels. A little less than half of the surveyed researchers used traditional media such as television or newspapers for communication, while around 37\% discussed their work on social media. Approximately 40\% of researchers shared their research results at events for a broad, non-academic audience.
+
+::: plot-box
+<div class="plot-title">Research results are most often made available to a wider public on institutional websites</div>
+
+```{r plot-4}
+#| out-width: "100%"
+#| fig-height: 5.5
+
+channel_1 <-
+    switch(
+    params$lang,
+    en = "Policy briefs",
+    de = "Politische Richtlinien",
+    fr = "Directives politiques"
+  )
+
+channel_2 <-
+    switch(
+    params$lang,
+    en = "Traditional media (TV, radio, print)",
+    de = "Traditionelle Medien (TV, Radio, Zeitung)",
+    fr = "Médias traditionnels (TV, radio, journaux)"
+  )
+
+channel_3 <-
+    switch(
+    params$lang,
+    en = "Professional journals and magazines",
+    de = "Fachzeitschriften und -magazine",
+    fr = "Revues et magazines spécialisés"
+  )
+
+channel_4 <-
+    switch(
+    params$lang,
+    en = "Own institutional or project websites",
+    de = "Websites der Forschungsinstitution bzw. des Projekts",
+    fr = "Site Internet de l’institut de recherche ou du projet "
+  )
+
+channel_5 <-
+    switch(
+    params$lang,
+    en = "Social media",
+    de = "Soziale Medien",
+    fr = "Réseaux sociaux"
+  )
+
+channel_6 <-
+    switch(
+    params$lang,
+    en = "Online platforms (data, code sharing)",
+    de = "Online-Plattformen (Data, Code sharing)",
+    fr = "Plateformes en ligne (partage de données, codes)"
+  )
+
+channel_7 <-
+    switch(
+    params$lang,
+    en = "Consultancy",
+    de = "Beratungen",
+    fr = "Consultations"
+  )
+
+channel_8 <-
+    switch(
+    params$lang,
+    en = "Events for non-academic practitioners",
+    de = "Events für nicht-akademische Fachkräfte",
+    fr = "Manifestations à l’intention du personnel non académique"
+  )
+
+channel_9 <-
+    switch(
+    params$lang,
+    en = "Events for a non-academic public",
+    de = "Events für die nicht-akademische Öffentlichkeit",
+    fr = "Manifestations à l’intention d’un public non académique"
+  )
+
+tribble(
+  ~var,      ~answer, ~n,
+  channel_1, "No",    301,
+  channel_1, "Yes",   32,
+  channel_2, "No",    196,
+  channel_2, "Yes",   150,
+  channel_3, "No",    198,
+  channel_3, "Yes",   145,
+  channel_4, "No",    74,
+  channel_4, "Yes",   280,
+  channel_5, "No",    219,
+  channel_5, "Yes",   128,
+  channel_6, "No",    228,
+  channel_6, "Yes",   115,
+  channel_7, "No",    226,
+  channel_7, "Yes",   116,
+  channel_8, "No",    233,
+  channel_8, "Yes",   110,
+  channel_9, "No",    207,
+  channel_9, "Yes",   136
+) |>
+  mutate(
+    prop = n / sum(n),
+    order = prop[answer == "Yes"],
+    .by = var
+  ) |>
+  filter(answer == "Yes") |>
+  prep_data(answer_type = "skip", lang = params$lang) |>
+  make_plot(
+    x = prop,
+    y = var,
+    fill = answer
+  )
+
+```
+::: caption
+Data: The data used for this graph were reproduced from the ZSI study and relates to Table 11 (page 63) of the study.
+:::
+:::
+
+### The role of social innovation in science
+
+Social innovation plays a role in SNSF-funded projects. But the study by ZSI Vienna also shows that research results often remain within the academic domain and are not directly put into practice through social innovation. Yet, this does not mean research has failed its purpose, as new findings were discovered and important experiences were gained. Research is continually evolving and is oriented towards long-term development. In many cases, we simply do not know what will lead to social innovation in the future.
+
+However, the study clearly demonstrates that social innovation is an important source of motivation: researchers have future societal benefits in mind and are motivated to contribute to the common good. To this end, they often collaborate with partners outside of academia. In addition, the researchers use a variety of dissemination channels to make their research results accessible to a broad public. It is clear that social innovation plays a role in science and for researchers – even if not every project can directly lead to a social change. 
+
+
+### Additional Information
+<p>
+<a class="button-blue" href="https://zenodo.org/records/7756474">Social Innovation study by the ZSI</a>
+<br>
+<a class="button-blue" href="https://www.snf.ch/en/yFkotlXx9Y2cS2Bj/news/study-on-social-innovation-in-research">SNSF news on the Social Innovation study</a>
+</p>
+
+Data, text and code of this data story are [available on Github](`r params$github_url`) and [archived on Zenodo](`r params$doi`). <br>DOI: `r str_remove(params$doi, "https://doi.org/")`
+
+```{r prevent-internal-snsf-packages, include=FALSE}
+#| include: false
+
+# Internal SNSF packages must not be used in data stories, as their
+# pre-processing functions are internal and the corporate design differs from
+# the data portal.
+if (any(c("snfverse", "snf.preprocessing", "snf.plot") %in% 
+        loadedNamespaces())) {
+  stop(glue(
+    "You must not use internal SNSF packages in data stories.",
+    " Please resort to snf.datastory."
+  ))
+}
+```
